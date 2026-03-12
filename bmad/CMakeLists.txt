@@ -21,9 +21,10 @@ ELSE ()
   )
 ENDIF ()
 
-SET (SRC_DIRS 
-  code 
+SET (SRC_DIRS
+  code
   ### custom  # Using function pointers now
+  laser
   geometry
   interface
   modules

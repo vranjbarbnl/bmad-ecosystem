@@ -17,6 +17,7 @@ use expression_mod
 use mode3_mod, only: make_N
 use random_mod
 use s_fitting_new, only: probe, internal_state, track_probe, assignment(=), operator(+), default, spin0
+use laser_tracking_mod
 
 implicit none
 
@@ -222,6 +223,9 @@ if (ltt_com%master_input_file == '') ltt_com%master_input_file = 'long_term_trac
 open(1, file = ltt_com%master_input_file, status = 'old', action = 'read')
 read (1, nml = params)
 close(1)
+
+! DEBUG: Check spin value immediately after namelist read
+write(*,'(A,3F12.8)') 'NAMELIST READ: beam_init%spin = ', beam_init%spin
 
 if (.not. ltt%print_info_messages) call output_direct (-1, .false., s_blank$, s_success$) ! Do not print
 if (.not. ltt%print_info_messages) call output_direct (-1, .false., s_important$, s_important$) ! Do not print
@@ -1526,13 +1530,28 @@ endif
 
 !
 
+! DEBUG: Print spin initialization info and statistics
+write(*,'(A,3F10.6)') 'LTT INIT: beam_init%spin = ', ltt_com%beam_init%spin
+write(*,'(A,3F10.6)') 'LTT INIT: First particle spin = ', bunch%particle(1)%spin
+write(*,'(A,F10.6)') 'LTT INIT: First particle |spin| = ', &
+  sqrt(bunch%particle(1)%spin(1)**2 + bunch%particle(1)%spin(2)**2 + bunch%particle(1)%spin(3)**2)
+write(*,'(A,3F10.6)') 'LTT INIT: Last particle spin = ', bunch%particle(size(bunch%particle))%spin
+write(*,'(A,F10.6)') 'LTT INIT: Last particle |spin| = ', &
+  sqrt(bunch%particle(size(bunch%particle))%spin(1)**2 + bunch%particle(size(bunch%particle))%spin(2)**2 + bunch%particle(size(bunch%particle))%spin(3)**2)
+write(*,'(A,3F10.6)') 'LTT INIT: Closed orbit spin = ', ltt_com%bmad_closed_orb(ele_start%ix_ele)%spin
+write(*,'(A,6ES12.4)') 'LTT INIT: Closed orbit vec = ', ltt_com%bmad_closed_orb(ele_start%ix_ele)%vec
+write(*,'(A,6ES12.4)') 'LTT INIT: First particle vec BEFORE track = ', bunch%particle(1)%vec
+write(*,'(A,ES12.4)') 'LTT INIT: First particle z BEFORE track = ', bunch%particle(1)%vec(5)
+
 if (bmad_com%spin_tracking_on .and. all(ltt_com%beam_init%spin == 0) .and. all(bunch%particle%spin(1) == 0) .and. &
                             all(bunch%particle%spin(2) == 0) .and. all(bunch%particle%spin(3) == 0)) then
   ie = ele_start%ix_ele
+  write(*,*) 'LTT INIT: Overwriting particle spins with closed orbit spin!'
   do ib = 1, size(beam%bunch)
     forall (n = 1:3) beam%bunch(ib)%particle%spin(n) = ltt_com%bmad_closed_orb(ie)%spin(n)
   enddo
 endif
+write(*,'(A,3F10.6)') 'LTT INIT: Final first particle spin = ', bunch%particle(1)%spin
 
 call ltt_setup_high_energy_space_charge(lttp, ltt_com, branch)
 
@@ -3380,14 +3399,23 @@ real(rp) t, r
 integer, optional :: direction
 integer ip, ir, ie, n, iv, n_alive
 
-logical err, finished
+logical err, finished, local_finished, radiation_included
 
-! Rampers are only applied to the element once per bunch. That is, it is assumed 
-! that the ramper control function variation is negligible over the time scale of a bunch passage. 
+! Rampers are only applied to the element once per bunch. That is, it is assumed
+! that the ramper control function variation is negligible over the time scale of a bunch passage.
 ! To evaluate multiple times in a bunch passage would, in general, be wrong if using ran() or ran_gauss().
 
 err = .false.
 finished = .false.
+
+! Apply laser tracking to each particle in the bunch (not during closed orbit calc)
+do ip = 1, size(bunch%particle)
+  if (bunch%particle(ip)%state /= alive$) cycle
+  call laser_track1_preprocess(bunch%particle(ip), ele, ele%branch%param, err, &
+                                local_finished, radiation_included, .false.)
+  if (err) return
+enddo
+
 if (.not. ltt_params_global%ramping_on) return 
 if (ltt_params_global%ramp_update_each_particle) return 
 
@@ -3479,10 +3507,17 @@ logical err_flag, finished, radiation_included, is_there
 
 character(*), parameter :: r_name = 'ltt_track1_preprocess'
 
-! This routine may be called by bmad_parser (via ele_compute_ref_energy_and_time) which is 
+! This routine may be called by bmad_parser (via ele_compute_ref_energy_and_time) which is
 ! before LTT ramping has been setup. To avoid problems, return if setup has not been done.
 
 err_flag = .false.
+
+! Apply laser tracking if element has LASER_XI defined (only during actual tracking, not during init)
+! TEMPORARILY DISABLED for testing
+! if (associated(ltt_com_global%tracking_lat%ele)) then
+!   call laser_track1_preprocess(start_orb, ele, param, err_flag, finished, radiation_included, present(track))
+! endif
+
 if (.not. associated(ltt_com_global%tracking_lat%ele)) return
 
 ! Recording a particle track?

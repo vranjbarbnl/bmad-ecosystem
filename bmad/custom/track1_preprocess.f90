@@ -33,6 +33,7 @@
 subroutine track1_preprocess (start_orb, ele, param, err_flag, finished, radiation_included, track)
 
 use bmad
+use laser_tracking_mod
 
 implicit none
 
@@ -48,5 +49,8 @@ character(*), parameter :: r_name = 'track1_preprocess'
 !
 
 err_flag = .false.
+
+! Call laser tracking module if this is a laser element
+call laser_track1_preprocess(start_orb, ele, param, err_flag, finished, radiation_included, track)
 
 end subroutine
