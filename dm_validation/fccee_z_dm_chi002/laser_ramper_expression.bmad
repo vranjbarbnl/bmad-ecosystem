@@ -1,0 +1,66 @@
+! Expression-based laser ramper with z-sweep capability
+! DM validation run: LASER_XI ramped to 0.3556232088098463 during ON (was 0.1
+! for the original 10.6 um CO2 LCFA reference) -- this is the value giving
+! chi_e = 0.002 at 1064 nm, theta=10 deg, E=45.6 GeV (see ../README.md).
+! Pattern: 100 turns ON, 1 turn OFF, repeat cyclically (unchanged from reference).
+! During ON: sweep LASER_Z_CENTER across electron bunch (unchanged from reference).
+!
+! Uses modulo function to create periodic square wave and linear sweep
+! NOTE (unchanged from the original reference file): the "at 18 GeV" label on
+! turn_time below is stale/inherited from an earlier RCS-era version of this
+! ramper script. The VALUE itself (3.023586e-4 s) is correct for this ring --
+! it equals C/c = 90644.836 m / (2.99792458e8 m/s), the actual FCC-ee Z
+! revolution period, and it does feed into on_time/cycle_time, which the
+! ON/OFF and sweep expressions below use. Verified before reuse here; left
+! as found rather than editing the validated reference's comment text.
+
+! === TIMING PARAMETERS ===
+turn_time = 3.023586E-04  ! seconds per turn at 18 GeV
+on_turns = 100
+off_turns = 1
+cycle_turns = on_turns + off_turns  ! Total turns per cycle
+on_time = on_turns * turn_time      ! 1.281337 ms
+cycle_time = cycle_turns * turn_time ! 14.0947 ms
+
+! === RF AND BUNCH PARAMETERS ===
+C = 90644.836       ! circumference in m
+h = 121200            ! RF harmonic number
+phi0 = 0.6779       ! RF phase in rad (from lat.bmad)
+lambda_RF = C / h   ! RF wavelength = 0.506507 m
+
+! Bunch center from empirical formula: z_center = 4 × φ₀ × λ_RF / (2π)
+z_center = 47.85e-3 ! 4 * phi0 * lambda_RF / (2 * pi)  ! ≈ 0.2186 m
+
+sig_z = 2.0e-3      ! bunch RMS length in m (from init file)
+sweep_range = 3 * sig_z  ! sweep ±3σ_z = ±6 mm around center
+
+! === LASER INTENSITY RAMPER (ON/OFF CONTROL) ===
+! Expression:
+! - modulo(time, cycle_time) gives time within current cycle (0 to cycle_time)
+! - (on_time - modulo(...)) is positive during ON period, negative during OFF period
+! - Divide by cycle_time to get small number, then ceiling():
+!   * During ON: ceiling(small positive) = 1
+!   * During OFF: ceiling(small negative) = 0
+! - Multiply by the peak LASER_XI value (0.3556232088098463 here; see README.md)
+
+ramp_laser_xi: ramper = {laser_ip[LASER_XI]: 0.3556232088098463 * ceiling((on_time - modulo(time, cycle_time)) / cycle_time)}, &
+               var = {time}
+
+! === LASER Z-CENTER RAMPER (SWEEP CONTROL) ===
+! During ON period: sweep linearly from (z_center - 3σ_z) to (z_center + 3σ_z)
+! During OFF period: return to z_center
+!
+! Sweep formula:
+!   is_on = ceiling((on_time - modulo(time, cycle_time)) / cycle_time)
+!   sweep_fraction = modulo(time, cycle_time) / on_time  (0 to 1 during ON)
+!   z = z_center + is_on * sweep_range * (2 * sweep_fraction - 1)
+!
+! This gives:
+!   - At start of ON (t=0): z = z_center - sweep_range
+!   - At end of ON (t=on_time): z = z_center + sweep_range
+!   - During OFF: z = z_center (is_on = 0)
+
+ramp_laser_z: ramper = {laser_ip[LASER_Z_CENTER]: z_center + &
+                        sweep_range * (2 * modulo(time, cycle_time) / on_time - 1) * &
+                        ceiling((on_time - modulo(time, cycle_time)) / cycle_time)}, &
+              var = {time}

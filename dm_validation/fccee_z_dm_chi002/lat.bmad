@@ -1,0 +1,8 @@
+call, file = fccee_z.bmad
+parameter[p0c] = 45.6e9
+call, file = laser_ramper_expression.bmad
+bmad_com[radiation_damping_on] = T
+bmad_com[spin_tracking_on] = T
+
+expand_lattice
+
