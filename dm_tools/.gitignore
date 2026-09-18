@@ -1,0 +1,4 @@
+*.mod
+*.o
+dm_cli
+test_dm_interp

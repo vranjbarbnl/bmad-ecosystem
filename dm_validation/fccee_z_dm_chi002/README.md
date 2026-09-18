@@ -107,9 +107,14 @@ required by the DM module; see `fccee_z.bmad`'s comments for the full diff).
    a `bmad` library containing `laser_tracking_mod` (DM version, calls
    `dm_sample_energy_kick` / `dm_spin_transfer_matrix`, NOT `lcfa_map`) and
    `dm_interp_mod`.
-3. Sanity check before the long run: `bmad/laser/test_dm_interp` (build with
-   `gfortran -O2 -std=f2008 dm_interp_mod.f90 test_dm_interp.f90 -o
-   test_dm_interp` from `bmad/laser/`) should print `16 passed, 0 failed`.
+3. Sanity check before the long run: from `dm_tools/`, build with
+   `gfortran -O2 -std=f2008 ../bmad/laser/dm_interp_mod.f90 test_dm_interp.f90
+   -o test_dm_interp` -- running it should print `16 passed, 0 failed`.
+   (`dm_cli.f90` and `test_dm_interp.f90` live in `dm_tools/`, deliberately
+   NOT in `bmad/laser/`, since both are standalone `program` units -- leaving
+   them in `bmad/laser/` gets them swept into the `bmad` library's globbed
+   CMake source list and breaks the production build. Only `dm_interp_mod.f90`
+   and `laser_tracking_mod.f90`, both real modules, belong in `bmad/laser/`.)
 
 ## Run
 
