@@ -173,6 +173,18 @@ contains
       return  ! not a laser element
     end if
 
+    ! LASER_XI <= 0 means the laser is genuinely off this turn (e.g. during
+    ! the OFF phase of a gating ramper) -- a0=0 is below the DM tables' grid
+    ! (min a0=0.05), so a genuine "no interaction" case would otherwise hit
+    ! dm_sample_energy_kick's hard-stop for being out of range. The LCFA
+    ! version had the equivalent short-circuit via its `if (chi <= 0) return`
+    ! check; this is the DM equivalent, checked before requiring
+    ! LASER_THETA_DEG since a genuinely-off laser doesn't need one this turn.
+    if (laser_a0 <= 0.0d0) then
+      finished = .true.
+      return
+    end if
+
     ! REQUIRED for the DM lookup (see module header) -- no silent default.
     has_theta = fetch_attr(ele, "LASER_THETA_DEG", theta_deg)
     if (.not. has_theta) then
